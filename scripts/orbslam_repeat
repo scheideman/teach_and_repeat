@@ -15,6 +15,8 @@ import numpy as np
 
 from repeat_trajectory import FollowTrajectoryController
 
+MIN_TIME_BETWEEN_BUTTON_PRESS = 0.3
+
 class Button(IntEnum):
     Y = 3
     A = 0
@@ -50,26 +52,36 @@ class RepeatTrajectoryNode(object):
         self._param_client = dynamic_reconfigure.client.Client(self._slam_id, timeout=30)
 
         self._controller = FollowTrajectoryController()
-
+  
         self._run_on = True
         self._started = False
+
+        self._last_button_press = rospy.get_time()
     
     def _joy_callback(self, msg):
+        if self._debounce():
+            return
+
         if msg.buttons[Button.Y]:
             self._request_keyframes_proxy()
         elif msg.buttons[Button.B]:
             self._run_on = not self._run_on
-            if(self._run_on):
-                rospy.loginfo("Turned drive publishing on")
-            else:
-                rospy.loginfo("Turned drive publishing off")
+            rospy.loginfo("Drive publishing turned ON: {}".format(self._run_on))
         elif msg.buttons[Button.A]:
             pass
-            # if not self._started:
-            #     rospy.loginfo("Starting repeat trajectory node...")
-            #     self.run()
         elif msg.buttons[Button.X]:
             self._toggle_localization_mode()
+        self._last_button_press = rospy.get_time()
+    
+    def _debounce(self):
+        if self._time_since_last_button_press < MIN_TIME_BETWEEN_BUTTON_PRESS:
+            return True
+        else:
+            return False
+        self._last_button_press = rospy.get_time()
+    
+    def _time_since_last_button_press(self):
+        return rospy.get_time() - self._last_button_press  
             
     def _toggle_localization_mode(self):
         self._param_localization = rospy.get_param(self._slam_id + "/localize_only")

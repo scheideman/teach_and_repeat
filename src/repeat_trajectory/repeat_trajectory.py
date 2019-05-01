@@ -18,8 +18,8 @@ class FollowTrajectoryController(object):
         self._last_cte = 0
         self._max_ind = 0
         self._linear_speed = 0.25
-        self._curve2 = None
-        self._curve3 = None
+        self._cur_segment_curve = None
+        self._robots_progress_curve = None
         self._debug_plot = True
         self._plot_initialized = False
     
@@ -99,8 +99,8 @@ class FollowTrajectoryController(object):
             print('Plot not initialized...')
             return
         pg.QtGui.QApplication.processEvents()
-        self._curve2.setData(self._traj[self._cur_ind:self._next_ind+1, 0], self._traj[self._cur_ind:self._next_ind+1, 1])
-        self._curve3.setData([self._traj[self._cur_ind,0], robot_xy[0]], [self._traj[self._cur_ind,1], robot_xy[1]])
+        self._cur_segment_curve.setData(self._traj[self._cur_ind:self._next_ind+1, 0], self._traj[self._cur_ind:self._next_ind+1, 1])
+        self._robots_progress_curve.setData([self._traj[self._cur_ind,0], robot_xy[0]], [self._traj[self._cur_ind,1], robot_xy[1]])
     
     def _init_plotting(self):
         self._plot_initialized = True
@@ -111,6 +111,6 @@ class FollowTrajectoryController(object):
         # full path
         self._plot.plot(self._traj[:,0], self._traj[:,1], pen = "w")
         # current segment
-        self._curve2 = self._plot.plot(self._traj[self._cur_ind:self._next_ind+1,0],self._traj[self._cur_ind:self._next_ind+1,1],pen="r")
+        self._cur_segment_curve = self._plot.plot(self._traj[self._cur_ind:self._next_ind+1,0],self._traj[self._cur_ind:self._next_ind+1,1],pen="r")
         # robots position relative to current segment
-        self._curve3 = self._plot.plot(self._traj[self._cur_ind:self._next_ind+1,0], self._traj[self._cur_ind:self._next_ind+1,1],pen="g")
+        self._robots_progress_curve = self._plot.plot(self._traj[self._cur_ind:self._next_ind+1,0], self._traj[self._cur_ind:self._next_ind+1,1],pen="g")
