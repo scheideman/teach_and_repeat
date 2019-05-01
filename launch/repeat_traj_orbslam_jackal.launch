@@ -1,0 +1,6 @@
+<launch>
+    <arg name="cmd_topic" default="cmd_vel"/>
+    <arg name="joy_topic" default="/bluetooth_teleop/joy"/>
+    <arg name="slam_id" default="orb_slam2_rgbd"/>
+    <include file="$(find repeat_trajectory)/launch/repeat_trajectory.launch" pass_all_args="true" />
+</launch>
