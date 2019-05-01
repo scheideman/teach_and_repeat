@@ -1,0 +1,10 @@
+<launch>
+    <arg name="cmd_topic" default="cmd_vel"/>
+    <arg name="joy_topic" default="/bluetooth_teleop/joy"/>
+    <arg name="slam_id" default="orb_slam2_rgbd"/>
+    <node name="orbslam_repeat" pkg="repeat_trajectory" type="orbslam_repeat" output="screen">
+        <param name="cmd_vel_topic" value="$(arg cmd_topic)"/>
+        <param name="joy_topic" value="$(arg joy_topic)"/>
+        <param name="slam_id" value="$(arg slam_id)"/>
+    </node>
+</launch>

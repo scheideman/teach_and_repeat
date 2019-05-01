@@ -4,6 +4,7 @@ from sensor_msgs.msg import Joy
 from std_srvs.srv import Empty 
 from enum import Enum
 import pyqtgraph as pg
+from angles import shortest_angular_distance 
 
 class FollowTrajectoryController(object):
     def __init__(self):
@@ -36,7 +37,9 @@ class FollowTrajectoryController(object):
         traj = np.array(zip(xs,ys))
         return traj 
     
-    def get_angular_control(self, robot_xy, robot_heading):
+    def get_angular_control(self, robot_xyyaw):
+        robot_xy = np.array([robot_xyyaw[0], robot_xyyaw[1]])
+        robot_heading = robot_xyyaw[2]
         cte = self._calc_segmented_cte(robot_xy)
         heading_error = self._calc_heading_error(robot_heading)
         ang_speed = self._calc_pd_control(cte, heading_error)
@@ -56,13 +59,13 @@ class FollowTrajectoryController(object):
         segment_delta = next_xy - start_xy
         robot_delta = robot_xy - start_xy 
 
-        # project robot_delta onto delta to get distance along path
-        u = robot_delta.dot(segment_delta) / segment_delta.dot(segment_delta)
+        # project robot_delta onto segment_delta to get distance along segment 
+        distance_along_segment = robot_delta.dot(segment_delta) / segment_delta.dot(segment_delta)
 
-        if u >= 1:
+        if distance_along_segment >= 1:
             self._update_traj_inds()
 
-        # calculate CTE, vector rejection
+        # calculate cross track error, signed vector rejection
         cte = (robot_delta[1] * segment_delta[0] - robot_delta[0]
                * segment_delta[1]) / np.sqrt(segment_delta.dot(segment_delta))
 
@@ -79,7 +82,7 @@ class FollowTrajectoryController(object):
         path_delta = next_xy - start_xy
         path_heading = np.arctan2(path_delta[1],path_delta[0])
 
-        return robot_heading - path_heading
+        return shortest_angular_distance(robot_heading,path_heading)
 
     def _update_traj_inds(self):
         self._cur_ind = self._next_ind
@@ -89,7 +92,7 @@ class FollowTrajectoryController(object):
             self._next_ind = self._cur_ind + 1
     
     def _calc_pd_control(self, cte, heading_error):
-        return -heading_error - self._p*cte - self._d * (cte-self._last_cte)
+        return heading_error - self._p*cte - self._d * (cte-self._last_cte)
 
     def _update_plot(self,robot_xy):
         if not self._plot_initialized:

@@ -8,6 +8,7 @@ from geometry_msgs.msg import Twist
 from ros_numpy import numpify
 import tf2_ros
 import tf.transformations as tftrans
+import dynamic_reconfigure.client
 
 from enum import IntEnum
 import numpy as np
@@ -20,22 +21,24 @@ class Button(IntEnum):
     B = 1
     X = 2
 
-
-
 class RepeatTrajectoryNode(object):
-    def __init__(self, slam_id):
-        self._slam_id = slam_id
+    def __init__(self):
         self._robot_pose = None
+        
+        self._slam_id = rospy.get_param("~slam_id") 
+        joy_topic_name = rospy.get_param("~joy_topic")
+        cmd_topic_name = rospy.get_param("~cmd_vel_topic")
+
         self._tfBuffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tfBuffer)
-
+        
         self._joy_subscribe = rospy.Subscriber(
-            "/joy", Joy, callback=self._joy_callback)
+            joy_topic_name, Joy, callback=self._joy_callback)
         self._pose_subscribe = rospy.Subscriber(
             self._slam_id + "/pose", PoseStamped, callback=self._pose_callback)
         self._keyframes_subscribe = rospy.Subscriber(
             self._slam_id + "/keyframes", PoseArray, callback=self._keyframes_callback)
-        self._cmd_vel_pub = rospy.Publisher("/repeat_controller/cmd_vel", Twist, queue_size=1)
+        self._cmd_vel_pub = rospy.Publisher(cmd_topic_name, Twist, queue_size=1)
         
         rospy.loginfo("Waiting for request_keyframes service...")
         rospy.wait_for_service('request_keyframes')
@@ -43,11 +46,14 @@ class RepeatTrajectoryNode(object):
             'request_keyframes', Empty)
         rospy.loginfo("request_keyframes is available")
 
+        self._param_localization = rospy.get_param(self._slam_id + "/localize_only")
+        self._param_client = dynamic_reconfigure.client.Client(self._slam_id, timeout=30)
+
         self._controller = FollowTrajectoryController()
 
         self._run_on = True
         self._started = False
-
+    
     def _joy_callback(self, msg):
         if msg.buttons[Button.Y]:
             self._request_keyframes_proxy()
@@ -63,8 +69,12 @@ class RepeatTrajectoryNode(object):
             #     rospy.loginfo("Starting repeat trajectory node...")
             #     self.run()
         elif msg.buttons[Button.X]:
-            pass
-
+            self._toggle_localization_mode()
+            
+    def _toggle_localization_mode(self):
+        self._param_localization = rospy.get_param(self._slam_id + "/localize_only")
+        self._param_client.update_configuration({"localize_only": (not self._param_localization)})
+        rospy.loginfo("localize_only: {}".format(not self._param_localization))
 
     def _pose_callback(self, msg):
         self._robot_pose = msg.pose
@@ -88,27 +98,33 @@ class RepeatTrajectoryNode(object):
         rate = rospy.Rate(20)
         rospy.loginfo("Starting repeat trajectory loop...")        
         while not rospy.is_shutdown():
-            if self._run_on:
-                try:
-                    trans = self._tfBuffer.lookup_transform("map", "camera_link", rospy.Time())
-                    self._drive(trans)
-                except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-                    pass
+            try:
+                trans = self._tfBuffer.lookup_transform("map", "camera_link", rospy.Time())
+                self._drive(trans)
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                pass
 
             rate.sleep()
 
     def _drive(self, trans):
+        xyyaw = self._transform_to_xyyaw(trans)
+
+        ang = self._controller.get_angular_control(xyyaw)
+        lin = self._controller.get_linear_control()
+
+        control_msg = self._construct_twist_message(ang,lin)
+
+        if self._run_on:
+            self._cmd_vel_pub.publish(control_msg)
+    
+    def _transform_to_xyyaw(self, trans):
         x = trans.transform.translation.x
         y = trans.transform.translation.y
         rot = trans.transform.rotation
         quat = [rot.x, rot.y, rot.z, rot.w]
         euler_angles = tftrans.euler_from_quaternion(quat)
+        return [x,y,euler_angles[2]]
 
-        ang = self._controller.get_angular_control(np.array([x,y]), euler_angles[2])
-        lin = self._controller.get_linear_control()
-
-        control_msg = self._construct_twist_message(ang,lin)
-        self._cmd_vel_pub.publish(control_msg)
     
     def _construct_twist_message(self, angular, linear):
         control_msg = Twist()
@@ -119,6 +135,6 @@ class RepeatTrajectoryNode(object):
 
 if __name__ == "__main__":
     rospy.init_node("orbslam_repeat")
-    repeatNode = RepeatTrajectoryNode("/orb_slam2_rgbd")
+    repeatNode = RepeatTrajectoryNode()
     repeatNode.run()
 
