@@ -1,13 +1,15 @@
 import rospy
 import numpy as np
 from sensor_msgs.msg import Joy
-from std_srvs.srv import Empty 
+from std_srvs.srv import Empty
 from enum import Enum
 import pyqtgraph as pg
-from angles import shortest_angular_distance 
+from angles import shortest_angular_distance
 
 class FollowTrajectoryController(object):
     def __init__(self):
+        self.max_angular = 0.45
+
         self._traj = []
         self.initialized = False
         self._cur_ind = 0
@@ -20,14 +22,17 @@ class FollowTrajectoryController(object):
         self._linear_speed = 0.25
         self._cur_segment_curve = None
         self._robots_progress_curve = None
-        self._debug_plot = True
+        self._debug_plot = False
         self._plot_initialized = False
-    
+
+        if self._debug_plot:
+            self._init_plotting()
+
     def init_controller(self, pose_array):
-        self._traj = self._pose_array_to_xy_array(pose_array) 
+        self._traj = self._pose_array_to_xy_array(pose_array)
         self._max_ind = len(self._traj) - 1
         self.initialized = True
-    
+
     def _pose_array_to_xy_array(self,pose_array):
         xs = []
         ys = []
@@ -35,8 +40,17 @@ class FollowTrajectoryController(object):
             xs.append(p[0,3])
             ys.append(p[1,3])
         traj = np.array(zip(xs,ys))
-        return traj 
-    
+        return traj
+
+    def get_control_command(self, robot_xyyaw):
+        ang = self.get_angular_control(robot_xyyaw)
+        lin = self.get_linear_control()
+        if np.abs(ang) >= self.max_angular:
+            lin = 0
+            ang = -self.max_angular if ang < 0 else self.max_angular
+
+        return lin,ang
+
     def get_angular_control(self, robot_xyyaw):
         robot_xy = np.array([robot_xyyaw[0], robot_xyyaw[1]])
         robot_heading = robot_xyyaw[2]
@@ -53,13 +67,13 @@ class FollowTrajectoryController(object):
     def _calc_segmented_cte(self, robot_xy):
         if self._debug_plot:
             self._update_plot(robot_xy)
-        
+
         start_xy, next_xy = self._get_current_segment()
 
         segment_delta = next_xy - start_xy
-        robot_delta = robot_xy - start_xy 
+        robot_delta = robot_xy - start_xy
 
-        # project robot_delta onto segment_delta to get distance along segment 
+        # project robot_delta onto segment_delta to get distance along segment
         distance_along_segment = robot_delta.dot(segment_delta) / segment_delta.dot(segment_delta)
 
         if distance_along_segment >= 1:
@@ -70,13 +84,13 @@ class FollowTrajectoryController(object):
                * segment_delta[1]) / np.sqrt(segment_delta.dot(segment_delta))
 
         return cte
-    
+
     def _get_current_segment(self):
         start_xy = self._traj[self._cur_ind,:]
         next_xy = self._traj[self._next_ind,:]
         return (start_xy,next_xy)
 
-    
+
     def _calc_heading_error(self, robot_heading):
         start_xy, next_xy = self._get_current_segment()
         path_delta = next_xy - start_xy
@@ -90,7 +104,7 @@ class FollowTrajectoryController(object):
             self._next_ind = 0
         else:
             self._next_ind = self._cur_ind + 1
-    
+
     def _calc_pd_control(self, cte, heading_error):
         return heading_error - self._p*cte - self._d * (cte-self._last_cte)
 
@@ -101,7 +115,7 @@ class FollowTrajectoryController(object):
         pg.QtGui.QApplication.processEvents()
         self._cur_segment_curve.setData(self._traj[self._cur_ind:self._next_ind+1, 0], self._traj[self._cur_ind:self._next_ind+1, 1])
         self._robots_progress_curve.setData([self._traj[self._cur_ind,0], robot_xy[0]], [self._traj[self._cur_ind,1], robot_xy[1]])
-    
+
     def _init_plotting(self):
         self._plot_initialized = True
 

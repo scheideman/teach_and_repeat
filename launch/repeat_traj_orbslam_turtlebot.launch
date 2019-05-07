@@ -1,0 +1,9 @@
+<launch>
+    <arg name="cmd_topic" default="/teleop_velocity_smoother/raw_cmd_vel"/>
+    <arg name="joy_topic" default="/joy"/>
+    <arg name="slam_id" default="orb_slam2_rgbd"/>
+
+    <include file="$(find turtlebot_teleop)/launch/includes/velocity_smoother.launch.xml"/>
+
+    <include file="$(find repeat_trajectory)/launch/repeat_trajectory.launch" pass_all_args="true" />
+</launch>

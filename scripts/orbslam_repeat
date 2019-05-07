@@ -15,7 +15,7 @@ import numpy as np
 
 from repeat_trajectory import FollowTrajectoryController
 
-MIN_TIME_BETWEEN_BUTTON_PRESS = 0.3
+MIN_TIME_BETWEEN_BUTTON_PRESS = 0.5
 
 class Button(IntEnum):
     Y = 3
@@ -57,6 +57,7 @@ class RepeatTrajectoryNode(object):
         self._started = False
 
         self._last_button_press = rospy.get_time()
+
     
     def _joy_callback(self, msg):
         if self._debounce():
@@ -68,17 +69,18 @@ class RepeatTrajectoryNode(object):
             self._run_on = not self._run_on
             rospy.loginfo("Drive publishing turned ON: {}".format(self._run_on))
         elif msg.buttons[Button.A]:
+            # TODO reset map
             pass
         elif msg.buttons[Button.X]:
             self._toggle_localization_mode()
         self._last_button_press = rospy.get_time()
     
     def _debounce(self):
-        if self._time_since_last_button_press < MIN_TIME_BETWEEN_BUTTON_PRESS:
+        if self._time_since_last_button_press() < MIN_TIME_BETWEEN_BUTTON_PRESS:
             return True
         else:
+            self._last_button_press = rospy.get_time()
             return False
-        self._last_button_press = rospy.get_time()
     
     def _time_since_last_button_press(self):
         return rospy.get_time() - self._last_button_press  
@@ -106,7 +108,7 @@ class RepeatTrajectoryNode(object):
         rospy.loginfo("Waiting for keyframe trajectory...")
         while not rospy.is_shutdown() and not self._controller.initialized:
             pass
-        self._controller._init_plotting()
+        # self._controller._init_plotting()
         rate = rospy.Rate(20)
         rospy.loginfo("Starting repeat trajectory loop...")        
         while not rospy.is_shutdown():
@@ -121,9 +123,7 @@ class RepeatTrajectoryNode(object):
     def _drive(self, trans):
         xyyaw = self._transform_to_xyyaw(trans)
 
-        ang = self._controller.get_angular_control(xyyaw)
-        lin = self._controller.get_linear_control()
-
+        lin, ang = self._controller.get_control_command(xyyaw)
         control_msg = self._construct_twist_message(ang,lin)
 
         if self._run_on:
