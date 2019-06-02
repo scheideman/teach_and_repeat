@@ -45,9 +45,12 @@ class FollowTrajectoryController(object):
     def get_control_command(self, robot_xyyaw):
         ang = self.get_angular_control(robot_xyyaw)
         lin = self.get_linear_control()
-        if np.abs(ang) >= self.max_angular:
+
+        if np.abs(ang) >= 0.75:
             lin = 0
-            ang = -self.max_angular if ang < 0 else self.max_angular
+            # ang = -self.max_angular if ang < 0 else self.max_angular
+
+        ang = np.clip(ang,-0.45, 0.45)
 
         return lin,ang
 
