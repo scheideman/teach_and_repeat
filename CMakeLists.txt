@@ -194,4 +194,7 @@ install(PROGRAMS
 # endif()
 
 ## Add folders to be run by python nosetests
-# catkin_add_nosetests(test)
+#if (CATKIN_ENABLE_TESTING)
+#  catkin_add_nosetests(tests/test_your_node.py)
+#endif()
+catkin_add_nosetests(tests)
