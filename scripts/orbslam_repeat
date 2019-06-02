@@ -28,6 +28,7 @@ class Button(IntEnum):
 class RepeatTrajectoryNode(object):
     def __init__(self):
         self._robot_pose = None
+        self._last_button_press = rospy.get_time()
 
         self._slam_id = rospy.get_param("~slam_id")
         joy_topic_name = rospy.get_param("~joy_topic")
@@ -62,8 +63,6 @@ class RepeatTrajectoryNode(object):
 
         self._run_on = True
         self._started = False
-
-        self._last_button_press = rospy.get_time()
 
     def _joy_callback(self, msg):
         if self._debounce():
