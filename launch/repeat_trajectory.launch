@@ -2,9 +2,11 @@
     <arg name="cmd_topic" default="cmd_vel"/>
     <arg name="joy_topic" default="joy"/>
     <arg name="slam_id" default="orb_slam2_rgbd"/>
+    <arg name="debug_plot" default="False"/>
     <node name="orbslam_repeat" pkg="repeat_trajectory" type="orbslam_repeat" output="screen">
         <param name="cmd_vel_topic" value="$(arg cmd_topic)"/>
         <param name="joy_topic" value="$(arg joy_topic)"/>
         <param name="slam_id" value="$(arg slam_id)"/>
+        <param name="debug_plot" value="$(arg debug_plot)"/>
     </node>
 </launch>
