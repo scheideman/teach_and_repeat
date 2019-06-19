@@ -2,9 +2,11 @@
 import rospy
 from sensor_msgs.msg import Joy
 from std_srvs.srv import Empty
+from std_msgs.msg import Float32
 from geometry_msgs.msg import PoseArray
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Twist
+from ar_track_alvar_msgs.msg import AlvarMarkers
 from ros_numpy import numpify
 import tf2_ros
 import tf.transformations as tftrans
@@ -46,6 +48,8 @@ class RepeatTrajectoryNode(object):
             self._slam_id + "/keyframes", PoseArray, callback=self._keyframes_callback)
         self._cmd_vel_pub = rospy.Publisher(
             cmd_topic_name, Twist, queue_size=1)
+        self._scale_pub = rospy.Publisher(
+            "/slam_scale", Float32, queue_size=1)
 
         rospy.loginfo("Waiting for request_keyframes service...")
         rospy.wait_for_service('request_keyframes')
@@ -63,6 +67,7 @@ class RepeatTrajectoryNode(object):
 
         self._run_on = True
         self._started = False
+        self._scale_calib_poses = []
 
     def _joy_callback(self, msg):
         if self._debounce():
@@ -75,8 +80,16 @@ class RepeatTrajectoryNode(object):
             rospy.loginfo(
                 "Drive publishing turned ON: {}".format(self._run_on))
         elif msg.buttons[Button.A]:
-            # TODO reset map
-            pass
+            est_pose = numpify(rospy.wait_for_message(
+                self._slam_id + "/pose", PoseStamped).pose)[0:3, 3]
+            markers = rospy.wait_for_message(
+                "/optical_frame/ar_pose_marker", AlvarMarkers).markers
+            if len(markers):
+                ar_pose = numpify(markers[0].pose.pose)[0:3, 3]
+                self._scale_calib_poses.append([est_pose, ar_pose])
+                if len(self._scale_calib_poses) > 1:
+                    scale = self._calc_scale_from_history()
+                    self._scale_pub.publish(Float32(scale))
         elif msg.buttons[Button.X]:
             self._toggle_localization_mode()
         self._last_button_press = rospy.get_time()
@@ -87,6 +100,14 @@ class RepeatTrajectoryNode(object):
         else:
             self._last_button_press = rospy.get_time()
             return False
+
+    def _calc_scale_from_history(self):
+        e_1, m_1 = self._scale_calib_poses[-2]
+        e_2, m_2 = self._scale_calib_poses[-1]
+        l_e = np.linalg.norm(e_2-e_1)
+        l_m = np.linalg.norm(m_2-m_1)
+        print(l_e/l_m)
+        return l_e/l_m
 
     def _time_since_last_button_press(self):
         return rospy.get_time() - self._last_button_press
